@@ -1,0 +1,112 @@
+embedding_vecor_length = 32
+model = Sequential()
+model.add(Embedding(top_words, embedding_vecor_length, mask_zero=True, input_length=max_review_length))
+model.add(
+    Bidirectional(
+        LSTM(
+            units=8,
+            return_sequences=True
+        ),
+        input_shape=(embedding_vecor_length, embedding_vecor_length)
+    )
+)
+model.add(
+    Bidirectional(
+        LSTM(units=8)
+    )
+)
+model.add(Dropout(0.5))
+model.add(Dense(32, activation='relu'))
+model.add(Dense(1,activation='relu')) #sigmoid relu softmax
+
+optimizer = Adam(lr=0.005) #5e-04
+model.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])   #mean_square_error
+
+print(model.summary())
+# 添加早停
+callback = EarlyStopping(monitor="val_loss", patience=10, verbose=0, mode='min')
+
+h = model.fit(X_train, y_train, epochs=50, batch_size=256,validation_split=0.2,callbacks=[callback]) # 64 90 32
+
+history = h.history
+epochs = range(len(history['accuracy']))
+
+
+
+
+Model: "sequential"
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #
+=================================================================
+ embedding (Embedding)       (None, 3138, 32)          224
+
+ bidirectional (Bidirectiona  (None, 3138, 16)         2624
+ l)
+
+ bidirectional_1 (Bidirectio  (None, 16)               1600
+ nal)
+
+ dropout (Dropout)           (None, 16)                0
+
+ dense (Dense)               (None, 32)                544
+
+ dense_1 (Dense)             (None, 1)                 33
+
+=================================================================
+Total params: 5,025
+Trainable params: 5,025
+Non-trainable params: 0
+_________________________________________________________________
+None
+C:\Users\舒\AppData\Local\Programs\Python\Python39\lib\site-packages\keras\optimizers\optimizer_v2\adam.py:110: UserWarning: The `lr` argument is deprecated, use `learning_rate` instead.
+  super(Adam, self).__init__(name, **kwargs)
+Epoch 1/50
+5/5 [==============================] - 126s 23s/step - loss: 1.8157 - accuracy: 0.3983 - val_loss: 0.9225 - val_accuracy: 0.3872
+Epoch 2/50
+5/5 [==============================] - 112s 24s/step - loss: 1.0832 - accuracy: 0.4068 - val_loss: 0.7598 - val_accuracy: 0.4680
+Epoch 3/50
+5/5 [==============================] - 125s 25s/step - loss: 0.8558 - accuracy: 0.4329 - val_loss: 0.7968 - val_accuracy: 0.3872
+Epoch 4/50
+5/5 [==============================] - 131s 26s/step - loss: 0.8047 - accuracy: 0.4059 - val_loss: 0.8080 - val_accuracy: 0.3872
+Epoch 5/50
+5/5 [==============================] - 134s 27s/step - loss: 0.7847 - accuracy: 0.4110 - val_loss: 0.7645 - val_accuracy: 0.3872
+Epoch 6/50
+5/5 [==============================] - 128s 26s/step - loss: 0.7518 - accuracy: 0.4093 - val_loss: 0.7106 - val_accuracy: 0.4545
+Epoch 7/50
+5/5 [==============================] - 134s 27s/step - loss: 0.7303 - accuracy: 0.4759 - val_loss: 0.6824 - val_accuracy: 0.5724
+Epoch 8/50
+5/5 [==============================] - 134s 27s/step - loss: 0.7230 - accuracy: 0.4987 - val_loss: 0.6793 - val_accuracy: 0.5825
+Epoch 9/50
+5/5 [==============================] - 124s 24s/step - loss: 0.7005 - accuracy: 0.5232 - val_loss: 0.6803 - val_accuracy: 0.5892
+Epoch 10/50
+5/5 [==============================] - 130s 27s/step - loss: 0.7033 - accuracy: 0.5367 - val_loss: 0.6838 - val_accuracy: 0.5690
+Epoch 11/50
+5/5 [==============================] - 132s 26s/step - loss: 0.6934 - accuracy: 0.5494 - val_loss: 0.6866 - val_accuracy: 0.5589
+Epoch 12/50
+5/5 [==============================] - 131s 26s/step - loss: 0.6792 - accuracy: 0.5536 - val_loss: 0.6830 - val_accuracy: 0.5286
+Epoch 13/50
+5/5 [==============================] - 127s 26s/step - loss: 0.6907 - accuracy: 0.5629 - val_loss: 0.6797 - val_accuracy: 0.5522
+Epoch 14/50
+5/5 [==============================] - 123s 24s/step - loss: 0.6803 - accuracy: 0.5831 - val_loss: 0.6780 - val_accuracy: 0.5488
+Epoch 15/50
+5/5 [==============================] - 120s 24s/step - loss: 0.6693 - accuracy: 0.5966 - val_loss: 0.6786 - val_accuracy: 0.5455
+Epoch 16/50
+5/5 [==============================] - 120s 24s/step - loss: 0.6759 - accuracy: 0.5924 - val_loss: 0.6859 - val_accuracy: 0.5286
+Epoch 17/50
+5/5 [==============================] - 110s 23s/step - loss: 0.6652 - accuracy: 0.5916 - val_loss: 0.6849 - val_accuracy: 0.5253
+Epoch 18/50
+5/5 [==============================] - 112s 21s/step - loss: 0.6613 - accuracy: 0.5992 - val_loss: 0.6819 - val_accuracy: 0.5286
+Epoch 19/50
+5/5 [==============================] - 118s 23s/step - loss: 0.6628 - accuracy: 0.6042 - val_loss: 0.6821 - val_accuracy: 0.5286
+Epoch 20/50
+5/5 [==============================] - 109s 21s/step - loss: 0.6751 - accuracy: 0.6203 - val_loss: 0.6849 - val_accuracy: 0.5219
+Epoch 21/50
+5/5 [==============================] - 117s 23s/step - loss: 0.6621 - accuracy: 0.6169 - val_loss: 0.6836 - val_accuracy: 0.5219
+Epoch 22/50
+5/5 [==============================] - 117s 23s/step - loss: 0.6631 - accuracy: 0.6068 - val_loss: 0.6837 - val_accuracy: 0.5286
+Epoch 23/50
+5/5 [==============================] - 115s 24s/step - loss: 0.6626 - accuracy: 0.6084 - val_loss: 0.6813 - val_accuracy: 0.5320
+Epoch 24/50
+5/5 [==============================] - 124s 24s/step - loss: 0.6621 - accuracy: 0.6101 - val_loss: 0.6827 - val_accuracy: 0.5320
+2
+Accuracy: 57.23%

@@ -1,0 +1,760 @@
+
+# LSTM for sequence classification in the IMDB dataset
+import random
+from copy import deepcopy
+from random import shuffle
+
+import numpy as np
+import pymysql
+import tensorflow as tf
+from keras.callbacks import EarlyStopping
+from keras.layers import Dropout, Bidirectional
+from keras.optimizers import Adam, Adagrad, RMSprop, Adadelta, SGD
+from matplotlib import pyplot as plt
+from numpy import shape
+from tensorflow.keras.datasets import imdb
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import LSTM
+from tensorflow.keras.layers import GRU
+from tensorflow.keras.layers import Embedding
+from tensorflow.keras.preprocessing import sequence
+# fix random seed for reproducibility
+from load import loadseqdata, readlabel
+from imblearn.under_sampling import RandomUnderSampler
+
+
+tf.random.set_seed(32)
+# load the dataset but only keep the top n words, zero the rest
+#参数 num_words=5000 的意思是仅保留训练数据中前 5000个最常出现的单词。低频单词将被舍弃
+# top_words = 5000
+top_words = 7
+# (X_train, y_train), (X_test, y_test) = imdb.load_data(num_words=top_words)
+
+
+# data = loadseqdata('clickseq.csv')
+data = loadseqdata('../clickseq-balance.csv')
+# copydata = data
+# data = np.append(data,copydata)
+labeldata = readlabel()
+# copylabeldata = labeldata
+# labeldata = np.append(labeldata,copylabeldata)
+
+#打乱数据
+# train_row = list(range(len(labeldata)))
+# random.shuffle(train_row)
+# data = data[train_row]
+# labeldata = labeldata[train_row]
+
+# X_train = data[0:2250]
+# X_test = data[2250:]
+# labeldata = readlabel()
+# y_train = labeldata[0:2250]
+# y_test = labeldata[2250:]
+
+X_train = data[0:741]
+X_test = data[741:]
+y_train = labeldata[0:741]
+y_test = labeldata[741:]
+
+# X_train = data[0:1482]
+# X_test = data[1482:]
+# y_train = labeldata[0:1482]
+# y_test = labeldata[1482:]
+
+# data,labeldata = shuffle(data,labeldata)
+# 欠采样
+# rus = RandomUnderSampler(random_state=0)
+# X_resampled, y_resampled = rus.fit_resample(X_train.reshape(-1, 1), y_train.reshape(-1, 1))
+# Counter(y_resampled)
+# print(y_resampled)
+# print(X_resampled)
+# print(shape(X_resampled))
+
+# 查看样本数量
+print("Training entries: {}, labels: {}".format(len(X_train),len(y_train)))
+# 影评文本已转换为整数，其中每个整数都表示字典中的一个特定字词。第一条影评如下所示:
+print("x-train.type",type(X_train))
+print("y-train.type",type(y_train))
+# print(X_train[0])
+# print(len(X_train[0]))
+# print(len(X_train[1]))
+# 第一条影评的标签
+# print(y_train[0])
+
+
+# truncate and pad input sequences
+#截断和填充输入序列，以便它们具有相同的长度以进行建模。
+# 3138
+# max_review_length = 500
+max_review_length = 3138
+X_train = sequence.pad_sequences(X_train, maxlen=max_review_length)
+X_test = sequence.pad_sequences(X_test, maxlen=max_review_length)
+
+# create the model
+embedding_vecor_length = 32
+model = Sequential()
+model.add(Embedding(top_words, embedding_vecor_length, mask_zero=True, input_length=max_review_length))
+model.add(LSTM(25))
+# model.add(GRU(16)) # 128 16
+model.add(Dropout(0))
+model.add(Dense(32,activation='relu'))
+# model.add(Dense(32))
+model.add(Dropout(0))
+model.add(Dense(1,activation='sigmoid')) #sigmoid relu softmax tanh
+
+# optimizer = Adam(learning_rate=0.005,amsgrad=True) #5e-04
+optimizer = Adam(lr=0.001) #5e-04
+
+# model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+model.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])   # binary_crossentropy mse
+
+print(model.summary())
+# 添加早停
+callback = EarlyStopping(monitor="val_loss", patience=10, verbose=0, mode='min')
+
+h = model.fit(X_train, y_train, epochs=300, batch_size=64) # 64 128
+# h = model.fit(X_train, y_train, epochs=50, batch_size=128,validation_split=0.2,callbacks=[callback]) # 64 90 32
+
+history = h.history
+epochs = range(len(history['accuracy']))
+
+# Final evaluation of the model
+scores = model.evaluate(X_test, y_test, verbose=0)
+print(len(scores))
+print("Accuracy: %.2f%%" % (scores[1]*100))
+
+plt.plot(epochs, history['accuracy'], 'b', label='Train accuracy')
+# plt.plot(epochs, history['val_accuracy'], 'r', label='Val accuracy')
+plt.show()
+plt.plot(epochs, history['loss'], 'b', label='Train loss')
+# plt.plot(epochs, history['val_loss'], 'r', label='Val loss')
+plt.show()
+
+
+
+
+Model: "sequential"
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #
+=================================================================
+ embedding (Embedding)       (None, 3138, 32)          224
+
+ lstm (LSTM)                 (None, 25)                5800
+
+ dropout (Dropout)           (None, 25)                0
+
+ dense (Dense)               (None, 32)                832
+
+ dropout_1 (Dropout)         (None, 32)                0
+
+ dense_1 (Dense)             (None, 1)                 33
+
+=================================================================
+Total params: 6,889
+Trainable params: 6,889
+Non-trainable params: 0
+_________________________________________________________________
+None
+Epoch 1/300
+12/12 [==============================] - 29s 2s/step - loss: 0.6931 - accuracy: 0.5074
+Epoch 2/300
+12/12 [==============================] - 16s 1s/step - loss: 0.6923 - accuracy: 0.5371
+Epoch 3/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6911 - accuracy: 0.5614
+Epoch 4/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6895 - accuracy: 0.5466
+Epoch 5/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6879 - accuracy: 0.5641
+Epoch 6/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6856 - accuracy: 0.5587
+Epoch 7/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6839 - accuracy: 0.5695
+Epoch 8/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6849 - accuracy: 0.5655
+Epoch 9/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6817 - accuracy: 0.5587
+Epoch 10/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6804 - accuracy: 0.5682
+Epoch 11/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6774 - accuracy: 0.5816
+Epoch 12/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6766 - accuracy: 0.5668
+Epoch 13/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6756 - accuracy: 0.5857
+Epoch 14/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6705 - accuracy: 0.5978
+Epoch 15/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6719 - accuracy: 0.6032
+Epoch 16/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6722 - accuracy: 0.5789
+Epoch 17/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6694 - accuracy: 0.5911
+Epoch 18/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6678 - accuracy: 0.5978
+Epoch 19/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6640 - accuracy: 0.5897
+Epoch 20/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6689 - accuracy: 0.5951
+Epoch 21/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6661 - accuracy: 0.5938
+Epoch 22/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6654 - accuracy: 0.5897
+Epoch 23/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6614 - accuracy: 0.5992
+Epoch 24/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6597 - accuracy: 0.6127
+Epoch 25/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6570 - accuracy: 0.6194
+Epoch 26/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6539 - accuracy: 0.6208
+Epoch 27/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6500 - accuracy: 0.6262
+Epoch 28/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6484 - accuracy: 0.6262
+Epoch 29/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6459 - accuracy: 0.6289
+Epoch 30/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6442 - accuracy: 0.6302
+Epoch 31/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6419 - accuracy: 0.6329
+Epoch 32/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6490 - accuracy: 0.6343
+Epoch 33/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6588 - accuracy: 0.6127
+Epoch 34/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6464 - accuracy: 0.6221
+Epoch 35/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6535 - accuracy: 0.6275
+Epoch 36/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6565 - accuracy: 0.6059
+Epoch 37/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6470 - accuracy: 0.6127
+Epoch 38/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6458 - accuracy: 0.6154
+Epoch 39/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6406 - accuracy: 0.6154
+Epoch 40/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6364 - accuracy: 0.6356
+Epoch 41/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6323 - accuracy: 0.6370
+Epoch 42/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6326 - accuracy: 0.6437
+Epoch 43/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6278 - accuracy: 0.6397
+Epoch 44/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6250 - accuracy: 0.6410
+Epoch 45/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6254 - accuracy: 0.6505
+Epoch 46/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6258 - accuracy: 0.6505
+Epoch 47/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6228 - accuracy: 0.6505
+Epoch 48/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6206 - accuracy: 0.6613
+Epoch 49/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6222 - accuracy: 0.6464
+Epoch 50/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6187 - accuracy: 0.6559
+Epoch 51/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6208 - accuracy: 0.6572
+Epoch 52/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6186 - accuracy: 0.6694
+Epoch 53/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6158 - accuracy: 0.6586
+Epoch 54/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6158 - accuracy: 0.6626
+Epoch 55/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6156 - accuracy: 0.6572
+Epoch 56/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6147 - accuracy: 0.6694
+Epoch 57/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6162 - accuracy: 0.6599
+Epoch 58/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6148 - accuracy: 0.6653
+Epoch 59/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6113 - accuracy: 0.6653
+Epoch 60/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6096 - accuracy: 0.6748
+Epoch 61/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6070 - accuracy: 0.6815
+Epoch 62/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6094 - accuracy: 0.6775
+Epoch 63/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6071 - accuracy: 0.6802
+Epoch 64/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6065 - accuracy: 0.6748
+Epoch 65/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6058 - accuracy: 0.6667
+Epoch 66/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6027 - accuracy: 0.6734
+Epoch 67/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6030 - accuracy: 0.6829
+Epoch 68/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5991 - accuracy: 0.6910
+Epoch 69/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5971 - accuracy: 0.6829
+Epoch 70/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5971 - accuracy: 0.6842
+Epoch 71/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6009 - accuracy: 0.6869
+Epoch 72/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6007 - accuracy: 0.6815
+Epoch 73/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5932 - accuracy: 0.6910
+Epoch 74/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5893 - accuracy: 0.6991
+Epoch 75/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5915 - accuracy: 0.6950
+Epoch 76/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5935 - accuracy: 0.6896
+Epoch 77/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5950 - accuracy: 0.6937
+Epoch 78/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5913 - accuracy: 0.6964
+Epoch 79/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5859 - accuracy: 0.6856
+Epoch 80/300
+12/12 [==============================] - 17s 1s/step - loss: 0.5870 - accuracy: 0.6977
+Epoch 81/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5881 - accuracy: 0.6856
+Epoch 82/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5857 - accuracy: 0.6869
+Epoch 83/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6023 - accuracy: 0.6802
+Epoch 84/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5834 - accuracy: 0.6883
+Epoch 85/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5775 - accuracy: 0.6896
+Epoch 86/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5778 - accuracy: 0.7018
+Epoch 87/300
+12/12 [==============================] - 17s 1s/step - loss: 0.5771 - accuracy: 0.6869
+Epoch 88/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5727 - accuracy: 0.6896
+Epoch 89/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5647 - accuracy: 0.7018
+Epoch 90/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5681 - accuracy: 0.7058
+Epoch 91/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5671 - accuracy: 0.7031
+Epoch 92/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5655 - accuracy: 0.7004
+Epoch 93/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5683 - accuracy: 0.6977
+Epoch 94/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5607 - accuracy: 0.7058
+Epoch 95/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5640 - accuracy: 0.6977
+Epoch 96/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5642 - accuracy: 0.7004
+Epoch 97/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5639 - accuracy: 0.6815
+Epoch 98/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5836 - accuracy: 0.6883
+Epoch 99/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5774 - accuracy: 0.6869
+Epoch 100/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5682 - accuracy: 0.7085
+Epoch 101/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5659 - accuracy: 0.6964
+Epoch 102/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5585 - accuracy: 0.7045
+Epoch 103/300
+12/12 [==============================] - 18s 2s/step - loss: 0.5525 - accuracy: 0.7072
+Epoch 104/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5554 - accuracy: 0.7072
+Epoch 105/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5469 - accuracy: 0.7085
+Epoch 106/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5515 - accuracy: 0.6977
+Epoch 107/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5659 - accuracy: 0.6896
+Epoch 108/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5676 - accuracy: 0.6910
+Epoch 109/300
+12/12 [==============================] - 18s 2s/step - loss: 0.5804 - accuracy: 0.6653
+Epoch 110/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5531 - accuracy: 0.7004
+Epoch 111/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5489 - accuracy: 0.7004
+Epoch 112/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5440 - accuracy: 0.7112
+Epoch 113/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5352 - accuracy: 0.7112
+Epoch 114/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5388 - accuracy: 0.7018
+Epoch 115/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5574 - accuracy: 0.6991
+Epoch 116/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5388 - accuracy: 0.7139
+Epoch 117/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5340 - accuracy: 0.7126
+Epoch 118/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5362 - accuracy: 0.7206
+Epoch 119/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5490 - accuracy: 0.7058
+Epoch 120/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5372 - accuracy: 0.7099
+Epoch 121/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5297 - accuracy: 0.7126
+Epoch 122/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5244 - accuracy: 0.7260
+Epoch 123/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5215 - accuracy: 0.7233
+Epoch 124/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5226 - accuracy: 0.7220
+Epoch 125/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5205 - accuracy: 0.7260
+Epoch 126/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5225 - accuracy: 0.7193
+Epoch 127/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5137 - accuracy: 0.7314
+Epoch 128/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5114 - accuracy: 0.7395
+Epoch 129/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5046 - accuracy: 0.7355
+Epoch 130/300
+12/12 [==============================] - 18s 2s/step - loss: 0.5048 - accuracy: 0.7341
+Epoch 131/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5021 - accuracy: 0.7368
+Epoch 132/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4996 - accuracy: 0.7382
+Epoch 133/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4973 - accuracy: 0.7395
+Epoch 134/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4993 - accuracy: 0.7395
+Epoch 135/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5024 - accuracy: 0.7314
+Epoch 136/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5077 - accuracy: 0.7328
+Epoch 137/300
+12/12 [==============================] - 18s 2s/step - loss: 0.5000 - accuracy: 0.7382
+Epoch 138/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5049 - accuracy: 0.7341
+Epoch 139/300
+12/12 [==============================] - 18s 2s/step - loss: 0.5212 - accuracy: 0.7328
+Epoch 140/300
+12/12 [==============================] - 18s 2s/step - loss: 0.5099 - accuracy: 0.7368
+Epoch 141/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5220 - accuracy: 0.7382
+Epoch 142/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5973 - accuracy: 0.6923
+Epoch 143/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6388 - accuracy: 0.6775
+Epoch 144/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6669 - accuracy: 0.6613
+Epoch 145/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6244 - accuracy: 0.6775
+Epoch 146/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6005 - accuracy: 0.6842
+Epoch 147/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5980 - accuracy: 0.6883
+Epoch 148/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5758 - accuracy: 0.7058
+Epoch 149/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5752 - accuracy: 0.7112
+Epoch 150/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5717 - accuracy: 0.7179
+Epoch 151/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5660 - accuracy: 0.7260
+Epoch 152/300
+12/12 [==============================] - 18s 2s/step - loss: 0.5624 - accuracy: 0.7260
+Epoch 153/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5753 - accuracy: 0.7179
+Epoch 154/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5584 - accuracy: 0.7139
+Epoch 155/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5463 - accuracy: 0.7220
+Epoch 156/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5416 - accuracy: 0.7233
+Epoch 157/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5363 - accuracy: 0.7139
+Epoch 158/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5359 - accuracy: 0.7206
+Epoch 159/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5346 - accuracy: 0.7287
+Epoch 160/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5241 - accuracy: 0.7328
+Epoch 161/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5226 - accuracy: 0.7328
+Epoch 162/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5259 - accuracy: 0.7341
+Epoch 163/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5794 - accuracy: 0.7004
+Epoch 164/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5790 - accuracy: 0.6950
+Epoch 165/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5664 - accuracy: 0.6991
+Epoch 166/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5493 - accuracy: 0.7139
+Epoch 167/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5422 - accuracy: 0.7247
+Epoch 168/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5359 - accuracy: 0.7260
+Epoch 169/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5331 - accuracy: 0.7287
+Epoch 170/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5264 - accuracy: 0.7247
+Epoch 171/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5256 - accuracy: 0.7287
+Epoch 172/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5262 - accuracy: 0.7314
+Epoch 173/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5238 - accuracy: 0.7355
+Epoch 174/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5239 - accuracy: 0.7287
+Epoch 175/300
+12/12 [==============================] - 18s 2s/step - loss: 0.5220 - accuracy: 0.7328
+Epoch 176/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5240 - accuracy: 0.7193
+Epoch 177/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5257 - accuracy: 0.7301
+Epoch 178/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5140 - accuracy: 0.7368
+Epoch 179/300
+12/12 [==============================] - 18s 2s/step - loss: 0.5125 - accuracy: 0.7382
+Epoch 180/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5080 - accuracy: 0.7368
+Epoch 181/300
+12/12 [==============================] - 18s 2s/step - loss: 0.5020 - accuracy: 0.7436
+Epoch 182/300
+12/12 [==============================] - 18s 2s/step - loss: 0.5039 - accuracy: 0.7382
+Epoch 183/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5036 - accuracy: 0.7436
+Epoch 184/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5021 - accuracy: 0.7409
+Epoch 185/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4993 - accuracy: 0.7476
+Epoch 186/300
+12/12 [==============================] - 18s 2s/step - loss: 0.4964 - accuracy: 0.7422
+Epoch 187/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5020 - accuracy: 0.7476
+Epoch 188/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5020 - accuracy: 0.7476
+Epoch 189/300
+12/12 [==============================] - 18s 2s/step - loss: 0.4975 - accuracy: 0.7449
+Epoch 190/300
+12/12 [==============================] - 18s 2s/step - loss: 0.4906 - accuracy: 0.7544
+Epoch 191/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4893 - accuracy: 0.7557
+Epoch 192/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4869 - accuracy: 0.7571
+Epoch 193/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4875 - accuracy: 0.7476
+Epoch 194/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4819 - accuracy: 0.7517
+Epoch 195/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4806 - accuracy: 0.7571
+Epoch 196/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4774 - accuracy: 0.7571
+Epoch 197/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4756 - accuracy: 0.7611
+Epoch 198/300
+12/12 [==============================] - 18s 2s/step - loss: 0.4704 - accuracy: 0.7625
+Epoch 199/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4740 - accuracy: 0.7584
+Epoch 200/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4721 - accuracy: 0.7530
+Epoch 201/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4704 - accuracy: 0.7571
+Epoch 202/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4684 - accuracy: 0.7598
+Epoch 203/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4808 - accuracy: 0.7517
+Epoch 204/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4710 - accuracy: 0.7584
+Epoch 205/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4849 - accuracy: 0.7652
+Epoch 206/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4678 - accuracy: 0.7652
+Epoch 207/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4627 - accuracy: 0.7625
+Epoch 208/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4816 - accuracy: 0.7584
+Epoch 209/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5370 - accuracy: 0.7314
+Epoch 210/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6076 - accuracy: 0.7045
+Epoch 211/300
+12/12 [==============================] - 17s 1s/step - loss: 0.5699 - accuracy: 0.7247
+Epoch 212/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5482 - accuracy: 0.7287
+Epoch 213/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5267 - accuracy: 0.7274
+Epoch 214/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5242 - accuracy: 0.7287
+Epoch 215/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5300 - accuracy: 0.7233
+Epoch 216/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5545 - accuracy: 0.7112
+Epoch 217/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5826 - accuracy: 0.7004
+Epoch 218/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5901 - accuracy: 0.6937
+Epoch 219/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5739 - accuracy: 0.7220
+Epoch 220/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5594 - accuracy: 0.7152
+Epoch 221/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5500 - accuracy: 0.7193
+Epoch 222/300
+12/12 [==============================] - 17s 1s/step - loss: 0.5465 - accuracy: 0.7301
+Epoch 223/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5449 - accuracy: 0.7368
+Epoch 224/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5335 - accuracy: 0.7274
+Epoch 225/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5354 - accuracy: 0.7233
+Epoch 226/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5304 - accuracy: 0.7233
+Epoch 227/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5279 - accuracy: 0.7328
+Epoch 228/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5191 - accuracy: 0.7368
+Epoch 229/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5178 - accuracy: 0.7355
+Epoch 230/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5122 - accuracy: 0.7409
+Epoch 231/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5020 - accuracy: 0.7503
+Epoch 232/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4965 - accuracy: 0.7490
+Epoch 233/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5017 - accuracy: 0.7476
+Epoch 234/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4869 - accuracy: 0.7544
+Epoch 235/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4911 - accuracy: 0.7449
+Epoch 236/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4783 - accuracy: 0.7611
+Epoch 237/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4725 - accuracy: 0.7652
+Epoch 238/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4748 - accuracy: 0.7638
+Epoch 239/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4681 - accuracy: 0.7571
+Epoch 240/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4648 - accuracy: 0.7598
+Epoch 241/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4755 - accuracy: 0.7557
+Epoch 242/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5111 - accuracy: 0.7314
+Epoch 243/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5067 - accuracy: 0.7436
+Epoch 244/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5175 - accuracy: 0.7220
+Epoch 245/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5069 - accuracy: 0.7368
+Epoch 246/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4834 - accuracy: 0.7598
+Epoch 247/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4788 - accuracy: 0.7530
+Epoch 248/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4801 - accuracy: 0.7584
+Epoch 249/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4752 - accuracy: 0.7571
+Epoch 250/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4665 - accuracy: 0.7625
+Epoch 251/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4682 - accuracy: 0.7571
+Epoch 252/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4592 - accuracy: 0.7679
+Epoch 253/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5845 - accuracy: 0.7166
+Epoch 254/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6427 - accuracy: 0.6599
+Epoch 255/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5967 - accuracy: 0.7031
+Epoch 256/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5520 - accuracy: 0.7301
+Epoch 257/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5444 - accuracy: 0.7355
+Epoch 258/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5564 - accuracy: 0.7301
+Epoch 259/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5277 - accuracy: 0.7395
+Epoch 260/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5055 - accuracy: 0.7476
+Epoch 261/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4972 - accuracy: 0.7490
+Epoch 262/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4958 - accuracy: 0.7449
+Epoch 263/300
+12/12 [==============================] - 18s 1s/step - loss: 0.4937 - accuracy: 0.7544
+Epoch 264/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5190 - accuracy: 0.7422
+Epoch 265/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5160 - accuracy: 0.7341
+Epoch 266/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5145 - accuracy: 0.7463
+Epoch 267/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5901 - accuracy: 0.6977
+Epoch 268/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6740 - accuracy: 0.6181
+Epoch 269/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6642 - accuracy: 0.6194
+Epoch 270/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6472 - accuracy: 0.6275
+Epoch 271/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6366 - accuracy: 0.6424
+Epoch 272/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6295 - accuracy: 0.6464
+Epoch 273/300
+12/12 [==============================] - 17s 1s/step - loss: 0.6229 - accuracy: 0.6451
+Epoch 274/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6169 - accuracy: 0.6383
+Epoch 275/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6130 - accuracy: 0.6478
+Epoch 276/300
+12/12 [==============================] - 20s 2s/step - loss: 0.6085 - accuracy: 0.6491
+Epoch 277/300
+12/12 [==============================] - 18s 2s/step - loss: 0.6073 - accuracy: 0.6478
+Epoch 278/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6140 - accuracy: 0.6343
+Epoch 279/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6095 - accuracy: 0.6410
+Epoch 280/300
+12/12 [==============================] - 18s 1s/step - loss: 0.6063 - accuracy: 0.6478
+Epoch 281/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5990 - accuracy: 0.6559
+Epoch 282/300
+12/12 [==============================] - 18s 2s/step - loss: 0.5959 - accuracy: 0.6572
+Epoch 283/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5920 - accuracy: 0.6599
+Epoch 284/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5881 - accuracy: 0.6640
+Epoch 285/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5878 - accuracy: 0.6626
+Epoch 286/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5841 - accuracy: 0.6626
+Epoch 287/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5808 - accuracy: 0.6667
+Epoch 288/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5798 - accuracy: 0.6734
+Epoch 289/300
+12/12 [==============================] - 18s 2s/step - loss: 0.5766 - accuracy: 0.6734
+Epoch 290/300
+12/12 [==============================] - 18s 2s/step - loss: 0.5796 - accuracy: 0.6775
+Epoch 291/300
+12/12 [==============================] - 18s 2s/step - loss: 0.5776 - accuracy: 0.6721
+Epoch 292/300
+12/12 [==============================] - 19s 2s/step - loss: 0.5734 - accuracy: 0.6788
+Epoch 293/300
+12/12 [==============================] - 18s 2s/step - loss: 0.5725 - accuracy: 0.6788
+Epoch 294/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5703 - accuracy: 0.6896
+Epoch 295/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5686 - accuracy: 0.6883
+Epoch 296/300
+12/12 [==============================] - 18s 2s/step - loss: 0.5675 - accuracy: 0.6923
+Epoch 297/300
+12/12 [==============================] - 18s 2s/step - loss: 0.5656 - accuracy: 0.7004
+Epoch 298/300
+12/12 [==============================] - 18s 2s/step - loss: 0.5642 - accuracy: 0.6977
+Epoch 299/300
+12/12 [==============================] - 18s 1s/step - loss: 0.5639 - accuracy: 0.6991
+Epoch 300/300
+12/12 [==============================] - 18s 2s/step - loss: 0.5614 - accuracy: 0.7031
+2
+Accuracy: 62.58%
